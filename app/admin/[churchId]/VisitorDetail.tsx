@@ -658,15 +658,23 @@ export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }:
                 body: m.body,
                 date: new Date(m.sent_at),
               })),
-              ...emailLog.map(e => ({
-                id: e.id,
-                type: 'email' as const,
-                direction: (e.direction ?? 'outbound') as 'inbound' | 'outbound',
-                body: e.body ?? e.email_type.replace(/_/g, ' '),
-                subject: e.subject ?? e.email_type.replace(/_/g, ' '),
-                date: new Date(e.sent_at),
-                opened: !!e.opened_at,
-              })),
+              ...emailLog.map(e => {
+                const autoLabels: Record<string, string> = {
+                  welcome_1: `Welcome to ${visitor.name.split(' ')[0]}!`,
+                  followup_2: `Still thinking about you, ${visitor.name.split(' ')[0]}`,
+                  followup_3: `See you tomorrow, ${visitor.name.split(' ')[0]}?`,
+                }
+                const subject = e.subject ?? autoLabels[e.email_type] ?? e.email_type.replace(/_/g, ' ')
+                return {
+                  id: e.id,
+                  type: 'email' as const,
+                  direction: (e.direction ?? 'outbound') as 'inbound' | 'outbound',
+                  body: e.body ?? null,
+                  subject,
+                  date: new Date(e.sent_at),
+                  opened: !!e.opened_at,
+                }
+              }),
             ].sort((a, b) => a.date.getTime() - b.date.getTime())
 
             const hasNoEmail = !visitor.email
@@ -699,9 +707,9 @@ export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }:
                           : 'bg-white/10 text-white'
                       }`}>
                         {item.type === 'email' && 'subject' in item && item.subject && (
-                          <p className="font-semibold text-xs mb-1 opacity-70">{item.subject}</p>
+                          <p className={`font-semibold text-xs opacity-70 ${item.body ? 'mb-1' : ''}`}>{item.subject}</p>
                         )}
-                        <p>{item.body}</p>
+                        {item.body && <p>{item.body}</p>}
                       </div>
                     </div>
                   ))}
