@@ -157,7 +157,7 @@ export default function AdminDashboard() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* Left — list */}
-        <div className="flex flex-col w-full md:w-80 lg:w-96 border-r border-white/10 flex-shrink-0">
+        <div className="flex flex-col w-full md:w-72 lg:w-80 border-r border-white/10 flex-shrink-0">
 
           {/* Search + filters */}
           <div className="px-4 py-3 border-b border-white/10 space-y-2 flex-shrink-0">
@@ -225,7 +225,6 @@ export default function AdminDashboard() {
                       <span className="text-xs px-1.5 py-0.5 rounded-full border border-[#B8832A]/30 text-[#B8832A]/70 leading-none">✝</span>
                     )}
                   </div>
-                  <p className="text-white/40 text-xs truncate mt-0.5">{visitor.email}</p>
                 </div>
                 <p className="text-white/20 text-xs flex-shrink-0 text-right">
                   {relativeTime(visitor.last_activity_at ?? visitor.created_at)}

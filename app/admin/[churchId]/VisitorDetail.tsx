@@ -27,8 +27,10 @@ export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }:
   const [tab, setTab] = useState<'activity' | 'messages' | 'notes'>('activity')
   const [editEmail, setEditEmail] = useState('')
   const [editPhone, setEditPhone] = useState('')
+  const [editName, setEditName] = useState('')
   const [editingEmail, setEditingEmail] = useState(false)
   const [editingPhone, setEditingPhone] = useState(false)
+  const [editingName, setEditingName] = useState(false)
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmDeleteAttendance, setConfirmDeleteAttendance] = useState<string | null>(null)
@@ -73,6 +75,7 @@ export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }:
       setVisitor(v)
       setEditEmail(v?.email ?? '')
       setEditPhone(v?.phone ?? '')
+      setEditName(v?.name ?? '')
       setThread(t)
       setAttendance(a ?? [])
       setEmailLog(e ?? [])
@@ -102,7 +105,7 @@ export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }:
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  async function saveField(field: 'email' | 'phone', value: string) {
+  async function saveField(field: 'email' | 'phone' | 'name', value: string) {
     setSaving(true)
     await fetch(`/api/visitors/${visitorId}`, {
       method: 'PATCH',
@@ -112,6 +115,7 @@ export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }:
     setVisitor(prev => prev ? { ...prev, [field]: value } : prev)
     if (field === 'email') setEditingEmail(false)
     if (field === 'phone') setEditingPhone(false)
+    if (field === 'name') setEditingName(false)
     setSaving(false)
   }
 
@@ -241,7 +245,24 @@ export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }:
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-white font-semibold text-base">{visitor.name}</h2>
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveField('name', editName.trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase())); if (e.key === 'Escape') setEditingName(false) }}
+                  className="bg-white/10 border border-[#B8832A]/50 rounded px-2 py-0.5 text-white text-base font-semibold focus:outline-none w-48"
+                />
+                <button onClick={() => saveField('name', editName.trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase()))} disabled={saving} className="text-[#B8832A] text-xs">Save</button>
+                <button onClick={() => setEditingName(false)} className="text-white/30 text-xs">Cancel</button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 group">
+                <h2 className="text-white font-semibold text-base">{visitor.name}</h2>
+                <button onClick={() => { setEditName(visitor.name); setEditingName(true) }} className="text-white/20 hover:text-[#B8832A] text-xs opacity-0 group-hover:opacity-100 transition-opacity">Edit</button>
+              </div>
+            )}
             <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
               visitor.is_returning
                 ? 'bg-blue-500/20 border border-blue-400/40 text-blue-300'
