@@ -44,23 +44,28 @@ export default function VisitPage() {
     setSubmitted(true)
     setError(null)
 
-    const { first_name, last_name, ...rest } = form
-    const res = await fetch('/api/visitors', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ church_id: churchId, ...rest, name: `${first_name.trim()} ${last_name.trim()}` }),
-    })
+    try {
+      const { first_name, last_name, ...rest } = form
+      const res = await fetch('/api/visitors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ church_id: churchId, ...rest, name: `${first_name.trim()} ${last_name.trim()}` }),
+      })
 
-    const data = await res.json()
-    if (!res.ok) {
-      setError(data.error ?? 'Something went wrong')
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'Something went wrong')
+        setSubmitted(false)
+        return
+      }
+
+      setVisitorId(data.visitor_id)
+      setIsReturning(data.is_returning)
+      setStep('tracking')
+    } catch {
+      setError('Something went wrong. Please try again.')
       setSubmitted(false)
-      return
     }
-
-    setVisitorId(data.visitor_id)
-    setIsReturning(data.is_returning)
-    setStep('tracking')
   }
 
   function startGeofence() {
