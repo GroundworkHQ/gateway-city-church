@@ -177,6 +177,17 @@ export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }:
     setLoadingInsight(false)
   }
 
+  async function logCall() {
+    window.open(`tel:${visitor?.phone}`)
+    const res = await fetch(`/api/visitors/${visitorId}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body: 'Call initiated from admin portal', tag: 'connected-with-pastor' }),
+    })
+    const note = await res.json()
+    if (note?.id) setNotes(prev => [note, ...prev])
+  }
+
   async function simulateGeofenceExit() {
     if (!visitor?.phone) return
     setSimulatingExit(true)
@@ -345,7 +356,7 @@ export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }:
               ) : (
                 <div className="flex items-center justify-between group">
                   {visitor.phone ? (
-                    <a href={`tel:${visitor.phone}`} className="text-[#B8832A] text-sm underline underline-offset-2 hover:text-[#d4a045] transition-colors">{formatPhone(visitor.phone)}</a>
+                    <button onClick={logCall} className="text-[#B8832A] text-sm underline underline-offset-2 hover:text-[#d4a045] transition-colors text-left">{formatPhone(visitor.phone)}</button>
                   ) : (
                     <span className="text-white text-sm">—</span>
                   )}
