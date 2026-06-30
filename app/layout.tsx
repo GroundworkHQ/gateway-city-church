@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Gateway City Church",
+  title: "Visitor Management",
   description: "Visitor management for Gateway City Church",
 };
 
