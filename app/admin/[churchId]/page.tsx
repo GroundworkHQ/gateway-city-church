@@ -257,7 +257,7 @@ export default function AdminDashboard() {
               level="M"
             />
           </div>
-          <p className="text-white/20 text-xs mt-8 font-mono">{process.env.NEXT_PUBLIC_APP_URL}/visit/{churchId}</p>
+
           <button
             onClick={() => window.print()}
             className="mt-6 px-6 py-2.5 border border-[#B8832A]/40 text-[#B8832A] text-sm rounded-lg hover:bg-[#B8832A]/10 transition-colors"

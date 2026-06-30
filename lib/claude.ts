@@ -45,7 +45,7 @@ async function callClaude(prompt: string, maxTokens = 512): Promise<string | nul
       messages: [{ role: 'user', content: prompt }],
     })
     const text = message.content[0].type === 'text' ? message.content[0].text : null
-    return text
+    return text?.replace(/—/g, '-') ?? null
   } catch {
     return null
   }
@@ -58,7 +58,7 @@ function buildFollowUpPrompt(followUpNumber: 2 | 3, visitor: VisitorContext): st
   const context = visitorContextLines(visitor)
 
   if (followUpNumber === 2) {
-    return `You are Pastor Danny at Gateway City Church in Las Vegas. Write a warm, personal follow-up to a visitor who came to church 3 days ago. This should feel like a genuine personal message, not a mass email.
+    return `You are Pastor Danny at Gateway City Church in Las Vegas. Write a warm, personal follow-up to a visitor who came to church 3 days ago. This should feel like a genuine personal message, not a mass email. Do not use em dashes (— or --).
 
 Visitor context:
 ${context}
@@ -73,7 +73,7 @@ Respond in this exact JSON format:
 {"emailParagraphs": "<p>...</p><p>...</p>", "smsBody": "..."}`
   }
 
-  return `You are Pastor Danny at Gateway City Church in Las Vegas. Write a warm, personal Sunday invitation to ${firstName} who visited 6 days ago. Tomorrow is Sunday and you want them to come back. This should feel genuinely personal.
+  return `You are Pastor Danny at Gateway City Church in Las Vegas. Write a warm, personal Sunday invitation to ${firstName} who visited 6 days ago. Tomorrow is Sunday and you want them to come back. This should feel genuinely personal. Do not use em dashes (— or --).
 
 Visitor context:
 ${context}
@@ -111,7 +111,7 @@ export async function generateWelcomeEmail(visitor: VisitorContext): Promise<str
   const firstName = visitor.name.split(' ')[0]
   const context = visitorContextLines(visitor)
 
-  const prompt = `You are Pastor Danny at Gateway City Church in Las Vegas. Write a warm, personal welcome email to someone who just attended church for the first time today.
+  const prompt = `You are Pastor Danny at Gateway City Church in Las Vegas. Write a warm, personal welcome email to someone who just attended church for the first time today. Do not use em dashes (— or --).
 
 Visitor context:
 ${context}
@@ -147,7 +147,7 @@ export async function generateSuggestedReply(
     .join('\n')
 
   const prompt = channel === 'sms'
-    ? `You are Pastor Danny at Gateway City Church in Las Vegas. Draft a reply to this visitor.
+    ? `You are Pastor Danny at Gateway City Church in Las Vegas. Draft a reply to this visitor. Do not use em dashes (— or --).
 
 Visitor context:
 ${context}
@@ -158,7 +158,7 @@ ${thread || '(No prior messages)'}
 Write a short casual SMS reply (under 160 characters, no sign-off — it's added automatically).
 
 Respond with ONLY the message text, nothing else.`
-    : `You are Pastor Danny at Gateway City Church in Las Vegas. Draft an email reply to this visitor.
+    : `You are Pastor Danny at Gateway City Church in Las Vegas. Draft an email reply to this visitor. Do not use em dashes (— or --).
 
 Visitor context:
 ${context}
@@ -196,7 +196,7 @@ export async function generateVisitorInsight(
 ): Promise<string | null> {
   const context = visitorContextLines(visitor)
 
-  const prompt = `You are a ministry assistant helping Pastor Danny understand a visitor at Gateway City Church. Based on the profile below, write a 2-3 sentence pastoral snapshot — who this person seems to be, what might matter to them spiritually, and a suggested approach for outreach. Be warm and insightful, not clinical.
+  const prompt = `You are a ministry assistant helping Pastor Danny understand a visitor at Gateway City Church. Based on the profile below, write a 2-3 sentence pastoral snapshot: who this person seems to be, what might matter to them spiritually, and a suggested approach for outreach. Be warm and insightful, not clinical. Do not use em dashes (-- or —) in your response.
 
 Visitor profile:
 ${context}
@@ -206,7 +206,7 @@ ${recentSmsContext ? `Recent SMS exchange context: ${recentSmsContext}` : ''}
 Respond with ONLY the 2-3 sentence snapshot, nothing else.`
 
   const text = await callClaude(prompt, 256)
-  return text?.trim() ?? null
+  return text?.trim().replace(/—/g, '-').replace(/--/g, '-') ?? null
 }
 
 // ─── Prayer request digest ───────────────────────────────────────────────────
@@ -221,7 +221,7 @@ export async function generatePrayerDigest(
     .map(v => `- ${v.name} (visited ${new Date(v.created_at).toLocaleDateString()}): "${v.prayer_request}"`)
     .join('\n')
 
-  const prompt = `You are a ministry assistant helping Pastor Danny at ${churchName} prepare for his week. Below are prayer requests from visitors this week. Write a brief, organized pastoral summary he can use to pray over and follow up on. Group by urgency or theme if patterns emerge. Keep it under 250 words. Warm, pastoral tone.
+  const prompt = `You are a ministry assistant helping Pastor Danny at ${churchName} prepare for his week. Below are prayer requests from visitors this week. Write a brief, organized pastoral summary he can use to pray over and follow up on. Group by urgency or theme if patterns emerge. Keep it under 250 words. Warm, pastoral tone. Do not use em dashes (— or --).
 
 Prayer requests:
 ${list}

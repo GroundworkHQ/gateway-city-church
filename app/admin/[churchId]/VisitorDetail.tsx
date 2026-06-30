@@ -670,17 +670,20 @@ export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }:
                 date: new Date(m.sent_at),
               })),
               ...emailLog.map(e => {
+                const firstName = visitor.name.split(' ')[0]
                 const autoLabels: Record<string, string> = {
-                  welcome_1: `Welcome to ${visitor.name.split(' ')[0]}!`,
-                  followup_2: `Still thinking about you, ${visitor.name.split(' ')[0]}`,
-                  followup_3: `See you tomorrow, ${visitor.name.split(' ')[0]}?`,
+                  welcome_1: `Welcome to ${firstName}!`,
+                  followup_2: `Still thinking about you, ${firstName}`,
+                  followup_3: `See you tomorrow, ${firstName}?`,
                 }
-                const subject = e.subject ?? autoLabels[e.email_type] ?? e.email_type.replace(/_/g, ' ')
+                const isAutomated = e.email_type in autoLabels
+                const subject = isAutomated ? autoLabels[e.email_type] : (e.subject ?? e.email_type.replace(/_/g, ' '))
+                const body = isAutomated ? null : e.body
                 return {
                   id: e.id,
                   type: 'email' as const,
                   direction: (e.direction ?? 'outbound') as 'inbound' | 'outbound',
-                  body: e.body ?? null,
+                  body,
                   subject,
                   date: new Date(e.sent_at),
                   opened: !!e.opened_at,

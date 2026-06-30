@@ -13,6 +13,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
+  const normalizedName = name.trim().toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())
+
   // Fetch church details
   const { data: church } = await supabaseAdmin
     .from('churches')
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest) {
     const { data: newVisitor, error } = await supabaseAdmin
       .from('church_visitors')
       .insert({
-        church_id, name, phone: phone || null, email: email || null,
+        church_id, name: normalizedName, phone: phone || null, email: email || null,
         how_heard: how_heard || null, prayer_request: prayer_request || null,
         service_preference: service_preference || null,
         is_returning: manualIsReturning ?? false,
@@ -69,18 +71,18 @@ export async function POST(req: NextRequest) {
   // Send welcome email (new visitors from kiosk only)
   if (!existing && !skip_notifications && email) {
     const aiBody = await generateWelcomeEmail({
-      name,
+      name: normalizedName,
       prayerRequest: prayer_request ?? null,
       howHeard: how_heard ?? null,
       servicePreference: service_preference ?? null,
       isReturning: false,
       churchName: church.name,
     }).catch(() => null)
-    const html = welcomeEmail(name, church.name, church.address || '', aiBody ?? undefined)
+    const html = welcomeEmail(normalizedName, church.name, church.address || '', aiBody ?? undefined)
     const { data: emailData } = await resend.emails.send({
       from: FROM,
       to: email,
-      subject: `Welcome to ${church.name}, ${name.split(' ')[0]}!`,
+      subject: `Welcome to ${church.name}, ${normalizedName.split(' ')[0]}!`,
       html,
     })
 
@@ -106,11 +108,12 @@ export async function POST(req: NextRequest) {
       other: 'word of mouth',
     }
     const howLine = how_heard ? ` Found us through ${howHeardLabels[how_heard] ?? how_heard}.` : ''
-    const serviceLine = service_preference ? ` Attended the ${service_preference} service.` : ''
+    const serviceLabel = service_preference ? service_preference.charAt(0).toUpperCase() + service_preference.slice(1) : ''
+    const serviceLine = serviceLabel ? ` Attended the ${serviceLabel} service.` : ''
     const prayerLine = prayer_request ? `\nPrayer request: "${prayer_request}"` : ''
     await sendSms(
       church.pastor_phone,
-      `${name} just checked in for the first time.${howLine}${serviceLine}${prayerLine}`
+      `${normalizedName} just checked in for the first time.${howLine}${serviceLine}${prayerLine}`
     )
   }
 

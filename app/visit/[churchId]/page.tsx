@@ -104,7 +104,7 @@ export default function VisitPage() {
           <div className="text-center mb-8">
             <div className="text-[#B8832A] text-4xl mb-3" style={{fontFamily:'Georgia,serif',fontStyle:'normal'}}>&#10013;</div>
             <h1 className="text-[#B8832A] text-2xl font-serif">Gateway City Church</h1>
-            <p className="text-white/50 text-sm mt-1">Las Vegas Campus — Connection Card</p>
+            <p className="text-white/50 text-sm mt-1">Las Vegas Campus · Connection Card</p>
           </div>
 
           <form onSubmit={handleSubmit} className="bg-white/5 border border-white/10 rounded-xl p-6 space-y-4">
