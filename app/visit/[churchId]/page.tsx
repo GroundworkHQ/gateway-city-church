@@ -30,7 +30,8 @@ export default function VisitPage() {
   const insideRef = useRef(true)
 
   const [form, setForm] = useState({
-    name: '',
+    first_name: '',
+    last_name: '',
     phone: '',
     email: '',
     how_heard: '',
@@ -43,10 +44,11 @@ export default function VisitPage() {
     setSubmitted(true)
     setError(null)
 
+    const { first_name, last_name, ...rest } = form
     const res = await fetch('/api/visitors', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ church_id: churchId, ...form }),
+      body: JSON.stringify({ church_id: churchId, ...rest, name: `${first_name.trim()} ${last_name.trim()}` }),
     })
 
     const data = await res.json()
@@ -108,15 +110,27 @@ export default function VisitPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="bg-white/5 border border-white/10 rounded-xl p-6 space-y-4">
-            <div>
-              <label className="block text-white/60 text-xs uppercase tracking-widest mb-1">Full Name *</label>
-              <input
-                required
-                value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#B8832A] transition-colors"
-                placeholder="First and last name"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-white/60 text-xs uppercase tracking-widest mb-1">First Name *</label>
+                <input
+                  required
+                  value={form.first_name}
+                  onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#B8832A] transition-colors"
+                  placeholder="First"
+                />
+              </div>
+              <div>
+                <label className="block text-white/60 text-xs uppercase tracking-widest mb-1">Last Name *</label>
+                <input
+                  required
+                  value={form.last_name}
+                  onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#B8832A] transition-colors"
+                  placeholder="Last"
+                />
+              </div>
             </div>
 
             <div>

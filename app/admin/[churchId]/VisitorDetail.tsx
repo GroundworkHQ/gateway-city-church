@@ -299,7 +299,7 @@ export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }:
                   : 'border-white/10 text-white/30 hover:border-white/20 hover:text-white/50'
               }`}
             >
-              {exitSent ? '✓ SMS Sent' : simulatingExit ? '...' : 'Simulate Exit'}
+              {exitSent ? '✓ SMS Sent' : simulatingExit ? '...' : 'Demo: Send Exit SMS'}
             </button>
           )}
           {confirmDelete ? (

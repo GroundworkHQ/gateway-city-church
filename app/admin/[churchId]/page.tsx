@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
 import { supabase } from '@/lib/supabase'
@@ -22,6 +22,14 @@ function relativeTime(dateStr: string) {
 }
 
 const HOW_HEARD_OPTIONS = ['friend', 'social_media', 'google', 'flyer', 'walked_by', 'other']
+const HOW_HEARD_LABELS: Record<string, string> = {
+  friend: 'A friend or family member',
+  social_media: 'Social media',
+  google: 'Google search',
+  flyer: 'Flyer',
+  walked_by: 'Walked by',
+  other: 'Other',
+}
 
 export default function AdminDashboard() {
   const { churchId } = useParams() as { churchId: string }
@@ -34,10 +42,24 @@ export default function AdminDashboard() {
   const [selected, setSelected] = useState<Visitor | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showQR, setShowQR] = useState(false)
+  const qrRef = useRef<HTMLDivElement>(null)
+
+  function downloadQR() {
+    const svg = qrRef.current?.querySelector('svg')
+    if (!svg) return
+    const serialized = new XMLSerializer().serializeToString(svg)
+    const blob = new Blob([serialized], { type: 'image/svg+xml' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'gateway-city-church-qr.svg'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   // Add contact form state
   const [addForm, setAddForm] = useState({
-    name: '', email: '', phone: '', service_preference: '', how_heard: '',
+    first_name: '', last_name: '', email: '', phone: '', service_preference: '', how_heard: '',
     prayer_request: '', is_returning: false,
   })
   const [addSaving, setAddSaving] = useState(false)
@@ -79,13 +101,14 @@ export default function AdminDashboard() {
 
   async function handleAddContact(e: React.FormEvent) {
     e.preventDefault()
-    if (!addForm.name.trim()) { setAddError('Name is required'); return }
+    if (!addForm.first_name.trim() || !addForm.last_name.trim()) { setAddError('First and last name are required'); return }
     setAddSaving(true)
     setAddError('')
+    const { first_name, last_name, ...rest } = addForm
     const res = await fetch('/api/visitors', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...addForm, church_id: churchId, skip_notifications: true }),
+      body: JSON.stringify({ ...rest, name: `${first_name.trim()} ${last_name.trim()}`, church_id: churchId, skip_notifications: true }),
     })
     const data = await res.json()
     if (!res.ok) {
@@ -97,7 +120,7 @@ export default function AdminDashboard() {
       setVisitors(prev => [data.visitor, ...prev.filter(v => v.id !== data.visitor.id)])
     }
     setShowAddModal(false)
-    setAddForm({ name: '', email: '', phone: '', service_preference: '', how_heard: '', prayer_request: '', is_returning: false })
+    setAddForm({ first_name: '', last_name: '', email: '', phone: '', service_preference: '', how_heard: '', prayer_request: '', is_returning: false })
     setAddSaving(false)
   }
 
@@ -115,10 +138,10 @@ export default function AdminDashboard() {
         </div>
         <div className="flex items-center gap-4">
           <div className="hidden md:flex items-center gap-5 text-sm">
-            <span className="text-white/70"><span className="text-white font-medium">{visitors.length}</span> Total</span>
-            <span className="text-white/70"><span className="text-white font-medium">{totalNew}</span> New</span>
-            <span className="text-white/70"><span className="text-blue-300 font-medium">{totalReturning}</span> Returning</span>
-            <span className="text-white/70"><span className="text-[#B8832A] font-medium">{withPrayer}</span> Prayer</span>
+            <span onClick={() => setFilter('all')} className="text-white/70 cursor-pointer hover:text-white transition-colors"><span className="text-white font-medium">{visitors.length}</span> Total</span>
+            <span onClick={() => setFilter('new')} className="text-white/70 cursor-pointer hover:text-white transition-colors"><span className="text-white font-medium">{totalNew}</span> New</span>
+            <span onClick={() => setFilter('returning')} className="text-white/70 cursor-pointer hover:text-white/90 transition-colors"><span className="text-blue-300 font-medium">{totalReturning}</span> Returning</span>
+            <span onClick={() => setFilter('prayer')} className="text-white/70 cursor-pointer hover:text-white/90 transition-colors"><span className="text-[#B8832A] font-medium">{withPrayer}</span> Prayer</span>
           </div>
           <div className="hidden md:block w-px h-5 bg-white/10" />
           <button
@@ -248,9 +271,9 @@ export default function AdminDashboard() {
           <div className="text-[#B8832A] text-5xl mb-4">✝</div>
           <h1 className="text-[#B8832A] font-serif text-2xl mb-1">{church?.name}</h1>
           <p className="text-white/40 text-sm mb-10">Scan to fill out your connection card</p>
-          <div className="bg-white p-6 rounded-2xl shadow-2xl">
+          <div ref={qrRef} className="bg-white p-6 rounded-2xl shadow-2xl">
             <QRCodeSVG
-              value={`${process.env.NEXT_PUBLIC_APP_URL}/visit/${churchId}`}
+              value={`${process.env.NEXT_PUBLIC_APP_URL}/connect`}
               size={260}
               bgColor="#ffffff"
               fgColor="#0D1B2A"
@@ -258,12 +281,20 @@ export default function AdminDashboard() {
             />
           </div>
 
-          <button
-            onClick={() => window.print()}
-            className="mt-6 px-6 py-2.5 border border-[#B8832A]/40 text-[#B8832A] text-sm rounded-lg hover:bg-[#B8832A]/10 transition-colors"
-          >
-            Print
-          </button>
+          <div className="flex items-center gap-3 mt-10">
+            <button
+              onClick={() => window.print()}
+              className="px-6 py-2.5 border border-[#B8832A]/40 text-[#B8832A] text-sm rounded-lg hover:bg-[#B8832A]/10 transition-colors"
+            >
+              Print
+            </button>
+            <button
+              onClick={downloadQR}
+              className="px-6 py-2.5 bg-[#B8832A]/10 border border-[#B8832A]/40 text-[#B8832A] text-sm rounded-lg hover:bg-[#B8832A]/20 transition-colors"
+            >
+              Download
+            </button>
+          </div>
         </div>
       )}
 
@@ -276,14 +307,27 @@ export default function AdminDashboard() {
               <button onClick={() => { setShowAddModal(false); setAddError('') }} className="text-white/30 hover:text-white transition-colors text-xl leading-none">×</button>
             </div>
             <form onSubmit={handleAddContact} className="px-6 py-5 space-y-4">
-              <div>
-                <label className="text-white/40 text-xs uppercase tracking-widest block mb-1.5">Name <span className="text-[#B8832A]">*</span></label>
-                <input
-                  value={addForm.name}
-                  onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="Full name"
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-white/25 text-sm focus:outline-none focus:border-[#B8832A] transition-colors"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-white/40 text-xs uppercase tracking-widest block mb-1.5">First Name <span className="text-[#B8832A]">*</span></label>
+                  <input
+                    required
+                    value={addForm.first_name}
+                    onChange={e => setAddForm(f => ({ ...f, first_name: e.target.value }))}
+                    placeholder="First"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-white/25 text-sm focus:outline-none focus:border-[#B8832A] transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-white/40 text-xs uppercase tracking-widest block mb-1.5">Last Name <span className="text-[#B8832A]">*</span></label>
+                  <input
+                    required
+                    value={addForm.last_name}
+                    onChange={e => setAddForm(f => ({ ...f, last_name: e.target.value }))}
+                    placeholder="Last"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-white/25 text-sm focus:outline-none focus:border-[#B8832A] transition-colors"
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -329,7 +373,7 @@ export default function AdminDashboard() {
                   >
                     <option value="">Unknown</option>
                     {HOW_HEARD_OPTIONS.map(o => (
-                      <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>
+                      <option key={o} value={o}>{HOW_HEARD_LABELS[o] ?? o.replace(/_/g, ' ')}</option>
                     ))}
                   </select>
                 </div>
@@ -364,7 +408,7 @@ export default function AdminDashboard() {
                 </button>
                 <button
                   type="submit"
-                  disabled={addSaving || !addForm.name.trim()}
+                  disabled={addSaving || !addForm.first_name.trim() || !addForm.last_name.trim()}
                   className="flex-1 py-2.5 bg-[#B8832A] hover:bg-[#b8852e] disabled:opacity-40 text-[#0D1B2A] rounded-lg text-sm font-semibold transition-colors"
                 >
                   {addSaving ? 'Saving...' : 'Add Contact'}
