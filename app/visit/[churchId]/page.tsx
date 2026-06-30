@@ -102,7 +102,7 @@ export default function VisitPage() {
       <div className="min-h-screen bg-[#0D1B2A] flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <div className="text-[#B8832A] text-4xl mb-3">✝</div>
+            <div className="text-[#B8832A] text-4xl mb-3" style={{fontFamily:'Georgia,serif',fontStyle:'normal'}}>&#10013;</div>
             <h1 className="text-[#B8832A] text-2xl font-serif">Gateway City Church</h1>
             <p className="text-white/50 text-sm mt-1">Las Vegas Campus — Connection Card</p>
           </div>
@@ -204,7 +204,7 @@ export default function VisitPage() {
     return (
       <div className="min-h-screen bg-[#0D1B2A] flex items-center justify-center px-4">
         <div className="w-full max-w-sm text-center">
-          <div className="text-[#B8832A] text-5xl mb-4">✝</div>
+          <div className="text-[#B8832A] text-5xl mb-4" style={{fontFamily:'Georgia,serif',fontStyle:'normal'}}>&#10013;</div>
           <h1 className="text-[#B8832A] text-2xl font-serif mb-2">Gateway City Church</h1>
 
           {isReturning ? (
