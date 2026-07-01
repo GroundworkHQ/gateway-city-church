@@ -42,6 +42,118 @@ export default function AdminDashboard() {
   const [selected, setSelected] = useState<Visitor | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showQR, setShowQR] = useState(false)
+
+  const [speakingIndex, setSpeakingIndex] = useState<number | null>(null)
+
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  function stopAudio() {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ''
+    }
+  }
+
+  function getAudioContext() {} // kept for call sites, no-op now
+
+  async function speakText(text: string, index?: number, loop = false) {
+    stopAudio()
+    if (index !== undefined && speakingIndex === index) { setSpeakingIndex(null); return }
+    if (index !== undefined) setSpeakingIndex(index)
+
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+    if (!res.ok) { setSpeakingIndex(null); return }
+
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const el = audioRef.current!
+    el.src = url
+    el.onended = () => {
+      setSpeakingIndex(null)
+      URL.revokeObjectURL(url)
+      if (loop && conversationModeRef.current) startListening(true)
+    }
+    el.onerror = () => { setSpeakingIndex(null); URL.revokeObjectURL(url) }
+    el.play()
+  }
+
+  function speak(text: string, index: number) {
+    speakText(text, index)
+  }
+
+  // Grace - natural language search
+  const [showGrace, setShowGrace] = useState(false)
+  const [graceQuery, setGraceQuery] = useState('')
+  const [graceLoading, setGraceLoading] = useState(false)
+  const [listening, setListening] = useState(false)
+  const recognitionRef = useRef<any>(null)
+
+  const [graceMessages, setGraceMessages] = useState<Array<{ role: 'user' | 'grace'; text: string; ids?: string[] }>>([])
+  const graceChatRef = useRef<HTMLDivElement>(null)
+  const conversationModeRef = useRef(false)
+
+  async function askGrace(query: string, fromVoice = false) {
+    if (!query.trim()) return
+    recognitionRef.current?.stop()
+    const userMsg = { role: 'user' as const, text: query }
+    setGraceMessages(prev => [...prev, userMsg])
+    setGraceQuery('')
+    setGraceLoading(true)
+    const res = await fetch('/api/visitors/nlsearch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, churchId }),
+    })
+    const data = await res.json()
+    const responseText = data.explanation ?? 'No results found.'
+    setGraceMessages(prev => [...prev, { role: 'grace' as const, text: responseText, ids: data.ids ?? [] }])
+    setGraceLoading(false)
+    setTimeout(() => graceChatRef.current?.scrollTo({ top: graceChatRef.current.scrollHeight, behavior: 'smooth' }), 50)
+    if (fromVoice) speakText(responseText, undefined, true)
+  }
+
+  function startListening(loop = false) {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SR) return
+    if (!loop && listening) {
+      conversationModeRef.current = false
+      recognitionRef.current?.stop()
+      return
+    }
+    audioRef.current?.pause(); audioRef.current = null
+    setSpeakingIndex(null)
+    const rec = new SR()
+    rec.lang = 'en-US'
+    rec.interimResults = false
+    rec.continuous = false
+    recognitionRef.current = rec
+    rec.onstart = () => setListening(true)
+    rec.onend = () => setListening(false)
+    rec.onerror = () => { setListening(false); conversationModeRef.current = false }
+    rec.onresult = (e: any) => {
+      const transcript = e.results[0][0].transcript
+      askGrace(transcript, true)
+    }
+    rec.start()
+  }
+
+  function toggleConversation() {
+    if (conversationModeRef.current) {
+      conversationModeRef.current = false
+      recognitionRef.current?.stop()
+      stopAudio()
+      setSpeakingIndex(null)
+    } else {
+      getAudioContext() // unlock audio on user gesture
+      conversationModeRef.current = true
+      startListening()
+    }
+  }
+
   const qrRef = useRef<HTMLDivElement>(null)
 
   function downloadQR() {
@@ -99,6 +211,33 @@ export default function AdminDashboard() {
   const totalReturning = visitors.filter(v => v.is_returning).length
   const withPrayer = visitors.filter(v => v.prayer_request).length
 
+  function exportCSV(list: Visitor[], filename = 'visitors.csv') {
+    const headers = ['Name', 'Email', 'Phone', 'Service', 'How Heard', 'Prayer Request', 'Returning', 'Opted Out', 'First Visit', 'Last Activity', 'Welcome Email', 'Follow-Up 2', 'Follow-Up 3']
+    const rows = list.map(v => [
+      v.name,
+      v.email ?? '',
+      v.phone ?? '',
+      v.service_preference ? (v.service_preference.charAt(0).toUpperCase() + v.service_preference.slice(1)) : '',
+      v.how_heard ? HOW_HEARD_LABELS[v.how_heard] ?? v.how_heard.replace(/_/g, ' ') : '',
+      v.prayer_request ?? '',
+      v.is_returning ? 'Yes' : 'No',
+      v.opted_out ? 'Yes' : 'No',
+      new Date(v.created_at).toLocaleDateString(),
+      v.last_activity_at ? new Date(v.last_activity_at).toLocaleDateString() : '',
+      v.email_1_sent_at ? new Date(v.email_1_sent_at).toLocaleDateString() : 'Not sent',
+      v.email_2_sent_at ? new Date(v.email_2_sent_at).toLocaleDateString() : 'Not sent',
+      v.email_3_sent_at ? new Date(v.email_3_sent_at).toLocaleDateString() : 'Not sent',
+    ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
+    const csv = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function handleAddContact(e: React.FormEvent) {
     e.preventDefault()
     if (!addForm.first_name.trim() || !addForm.last_name.trim()) { setAddError('First and last name are required'); return }
@@ -130,6 +269,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="h-screen bg-[#0D1B2A] text-white flex flex-col">
+      <audio ref={audioRef} playsInline />
 
       {/* Header */}
       <div className="border-b border-white/10 px-6 py-3 flex items-center justify-between flex-shrink-0">
@@ -138,17 +278,32 @@ export default function AdminDashboard() {
         </div>
         <div className="flex items-center gap-4">
           <div className="hidden md:flex items-center gap-5 text-sm">
-            <span onClick={() => setFilter('all')} className="text-white/70 cursor-pointer hover:text-white transition-colors"><span className="text-white font-medium">{visitors.length}</span> Total</span>
-            <span onClick={() => setFilter('new')} className="text-white/70 cursor-pointer hover:text-white transition-colors"><span className="text-white font-medium">{totalNew}</span> New</span>
-            <span onClick={() => setFilter('returning')} className="text-white/70 cursor-pointer hover:text-white/90 transition-colors"><span className="text-blue-300 font-medium">{totalReturning}</span> Returning</span>
+            <span onClick={() => setFilter('all')} className="text-white/70 cursor-pointer hover:text-white transition-colors"><span className="text-[#B8832A] font-medium">{visitors.length}</span> Total</span>
+            <span onClick={() => setFilter('new')} className="text-white/70 cursor-pointer hover:text-white transition-colors"><span className="text-[#B8832A] font-medium">{totalNew}</span> New</span>
+            <span onClick={() => setFilter('returning')} className="text-white/70 cursor-pointer hover:text-white/90 transition-colors"><span className="text-[#B8832A] font-medium">{totalReturning}</span> Returning</span>
             <span onClick={() => setFilter('prayer')} className="text-white/70 cursor-pointer hover:text-white/90 transition-colors"><span className="text-[#B8832A] font-medium">{withPrayer}</span> Prayer</span>
           </div>
           <div className="hidden md:block w-px h-5 bg-white/10" />
+          <button
+            onClick={() => exportCSV(filtered, 'gateway-visitors.csv')}
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 border border-white/10 text-white/40 text-xs rounded-lg hover:border-white/20 hover:text-white/60 transition-colors"
+          >
+            Export
+          </button>
           <button
             onClick={() => setShowQR(true)}
             className="hidden md:flex items-center gap-1.5 px-3 py-1.5 border border-white/10 text-white/40 text-xs rounded-lg hover:border-white/20 hover:text-white/60 transition-colors"
           >
             QR Code
+          </button>
+          <button
+            onClick={() => { setShowGrace(v => !v); setGraceQuery('') }}
+            className="flex items-center gap-1.5 pl-3 pr-4 py-1.5 rounded-full bg-gradient-to-r from-[#B8832A] to-[#d4a043] hover:opacity-90 transition-all shadow-[0_2px_12px_rgba(184,131,42,0.35)]"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-[#0D1B2A]">
+              <line x1="12" y1="2" x2="12" y2="22"/><line x1="5" y1="8" x2="19" y2="8"/>
+            </svg>
+            <span className="text-[#0D1B2A] font-semibold text-xs tracking-wide">Grace</span>
           </button>
         </div>
       </div>
@@ -212,17 +367,17 @@ export default function AdminDashboard() {
                   selected?.id === visitor.id ? 'bg-[#B8832A]/10 border-r-2 border-[#B8832A]' : 'hover:bg-white/5'
                 }`}
               >
-                <div className="w-9 h-9 rounded-full bg-[#B8832A] flex items-center justify-center text-[#0D1B2A] font-serif text-xs font-bold flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-[#B8832A] font-serif text-xs font-bold flex-shrink-0">
                   {visitor.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-white text-sm font-medium truncate">{visitor.name}</span>
                     {!visitor.is_returning && (
-                      <span className="text-xs px-1.5 py-0.5 rounded-full border border-white/30 text-white bg-white/10 leading-none">New</span>
+                      <span className="text-[10px] px-1 py-px rounded-full border border-white/25 text-white/70 bg-white/8 leading-none">New</span>
                     )}
                     {visitor.prayer_request && (
-                      <span className="text-xs px-1.5 py-0.5 rounded-full border border-[#B8832A]/30 text-[#B8832A]/70 leading-none">✝</span>
+                      <span className="text-[10px] px-1 py-px rounded-full border border-[#B8832A]/30 text-[#B8832A]/60 leading-none">✝</span>
                     )}
                   </div>
                 </div>
@@ -414,6 +569,122 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Grace chat window */}
+      {showGrace && (
+        <div className="fixed top-[60px] right-6 z-50 w-[340px] rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] flex flex-col border border-white/10" style={{maxHeight: '65vh', background: 'linear-gradient(160deg, #16263a 0%, #0f1e2e 100%)'}}>
+
+          {/* Header */}
+          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/8">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#B8832A] to-[#d4a043] flex items-center justify-center flex-shrink-0">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-[#0D1B2A]">
+                <line x1="12" y1="2" x2="12" y2="22"/><line x1="5" y1="8" x2="19" y2="8"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-white font-semibold text-sm leading-none">Grace</p>
+              <p className="text-white/35 text-xs mt-0.5">AI Assistant</p>
+            </div>
+            <button onClick={() => { setShowGrace(false); conversationModeRef.current = false; recognitionRef.current?.stop(); stopAudio(); setSpeakingIndex(null) }} className="ml-auto text-white/25 hover:text-white/70 transition-colors text-lg leading-none">×</button>
+          </div>
+
+          {/* Messages */}
+          <div ref={graceChatRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+            {graceMessages.length === 0 && (
+              <p className="text-white/25 text-sm text-center pt-6 leading-relaxed">Ask me anything about<br/>your visitors.</p>
+            )}
+            {graceMessages.map((msg, i) => (
+              <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                {msg.role === 'grace' && (
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#B8832A] to-[#d4a043] flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-[#0D1B2A]">
+                      <line x1="12" y1="2" x2="12" y2="22"/><line x1="5" y1="8" x2="19" y2="8"/>
+                    </svg>
+                  </div>
+                )}
+                <div className={`max-w-[82%] text-sm ${msg.role === 'user'
+                  ? 'bg-[#B8832A] text-[#0D1B2A] font-medium px-3.5 py-2.5 rounded-2xl rounded-tr-sm'
+                  : 'text-white/85'}`}>
+                  <div className={`flex items-start gap-2 ${msg.role === 'grace' ? '' : ''}`}>
+                    <p className={msg.role === 'grace' ? 'leading-relaxed flex-1' : 'flex-1'}>{msg.text}</p>
+                    {msg.role === 'grace' && (
+                      <button onClick={() => { getAudioContext(); speak(msg.text, i) }} className="flex-shrink-0 mt-0.5 text-white/25 hover:text-[#B8832A] transition-colors" title={speakingIndex === i ? 'Stop' : 'Read aloud'}>
+                        {speakingIndex === i ? (
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                        ) : (
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  {msg.ids && msg.ids.length > 0 && (
+                    <div className="mt-3 space-y-1.5">
+                      {visitors.filter(v => msg.ids!.includes(v.id)).map(v => (
+                        <button key={v.id} onClick={() => { setSelected(v); setShowGrace(false) }}
+                          className="w-full text-left px-3 py-2 rounded-xl bg-white/8 hover:bg-white/14 border border-white/8 transition-all group">
+                          <p className="text-white text-xs font-medium group-hover:text-[#B8832A] transition-colors">{v.name}</p>
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => exportCSV(visitors.filter(v => msg.ids!.includes(v.id)), 'grace-results.csv')}
+                        className="w-full text-center px-3 py-1.5 rounded-xl border border-[#B8832A]/30 text-[#B8832A] text-xs font-medium hover:bg-[#B8832A]/10 transition-all mt-1"
+                      >
+                        Download CSV
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            {graceLoading && (
+              <div className="flex gap-2 justify-start">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#B8832A] to-[#d4a043] flex items-center justify-center flex-shrink-0">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-[#0D1B2A]">
+                    <line x1="12" y1="2" x2="12" y2="22"/><line x1="5" y1="8" x2="19" y2="8"/>
+                  </svg>
+                </div>
+                <div className="text-white/40 text-sm pt-0.5">Thinking...</div>
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="px-3 pb-3 pt-2 border-t border-white/8">
+            <div className={`flex items-center gap-2 bg-white/6 rounded-xl px-3 py-2 border transition-colors ${listening ? 'border-[#B8832A]/70' : 'border-white/10 focus-within:border-[#B8832A]/50'}`}>
+              <button
+                onClick={toggleConversation}
+                className={`flex-shrink-0 transition-colors ${listening ? 'text-[#B8832A]' : 'text-white/25 hover:text-white/50'}`}
+                title={listening ? 'Stop listening' : 'Speak to Grace'}
+              >
+                {listening ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6" className="animate-pulse"/></svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+                  </svg>
+                )}
+              </button>
+              <input
+                autoFocus
+                value={graceQuery}
+                onChange={e => setGraceQuery(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && askGrace(graceQuery)}
+                placeholder={listening ? 'Listening...' : 'Ask Grace...'}
+                className="flex-1 bg-transparent text-white placeholder-white/25 text-sm focus:outline-none"
+              />
+              <button
+                onClick={() => askGrace(graceQuery)}
+                disabled={graceLoading || !graceQuery.trim()}
+                className="w-7 h-7 rounded-lg bg-[#B8832A] disabled:opacity-30 hover:bg-[#d4a043] transition-colors flex items-center justify-center flex-shrink-0"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#0D1B2A]">
+                  <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       )}

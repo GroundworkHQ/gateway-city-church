@@ -9,9 +9,10 @@ interface Props {
   churchId: string
   onBack?: () => void
   onDelete?: () => void
+  onTabChange?: (tab: 'activity' | 'messages' | 'notes') => void
 }
 
-export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }: Props) {
+export default function VisitorDetail({ visitorId, churchId, onBack, onDelete, onTabChange }: Props) {
   const [visitor, setVisitor] = useState<Visitor | null>(null)
   const [thread, setThread] = useState<{ id: string } | null>(null)
   const [messages, setMessages] = useState<SmsMessage[]>([])
@@ -56,7 +57,7 @@ export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }:
     setNotes([])
     setAttendance([])
     setEmailLog([])
-    setTab('activity')
+    setTab('activity'); onTabChange?.('activity')
     setChannel('sms')
     setConfirmDelete(false)
     setLoggingVisit(false)
@@ -238,7 +239,7 @@ export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }:
       {/* Record header */}
       <div className="flex items-center gap-4 px-6 py-4 border-b border-white/10 flex-shrink-0">
         {onBack && (
-          <button onClick={onBack} className="flex items-center justify-center w-8 h-8 rounded-lg border border-white/10 text-white/50 hover:border-white/30 hover:text-white transition-colors text-base flex-shrink-0">←</button>
+          <button onClick={onBack} className="flex items-center justify-center w-8 h-8 rounded-lg border border-white/10 text-white/50 hover:border-white/30 hover:text-white transition-colors text-xl flex-shrink-0">←</button>
         )}
         <div className="w-10 h-10 rounded-full bg-[#B8832A]/20 flex items-center justify-center text-[#B8832A] font-serif flex-shrink-0">
           {initials}
@@ -598,7 +599,7 @@ export default function VisitorDetail({ visitorId, churchId, onBack, onDelete }:
               { key: 'messages', label: 'Messages' },
               { key: 'notes', label: notes.length ? `Notes (${notes.length})` : 'Notes' },
             ] as const).map(({ key, label }) => (
-              <button key={key} onClick={() => setTab(key)}
+              <button key={key} onClick={() => { setTab(key); onTabChange?.(key) }}
                 className={`px-4 py-3 text-xs uppercase tracking-widest border-b-2 transition-colors ${
                   tab === key ? 'border-[#B8832A] text-[#B8832A]' : 'border-transparent text-white/40 hover:text-white/60'
                 }`}>

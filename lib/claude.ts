@@ -232,6 +232,44 @@ Respond with ONLY the summary text (plain text, no HTML).`
   return text?.trim() ?? null
 }
 
+// ─── Grace: natural language visitor search ──────────────────────────────────
+
+export async function naturalLanguageSearch(
+  query: string,
+  visitors: any[]
+): Promise<{ ids: string[]; explanation: string } | null> {
+  const prompt = `You are Grace, an AI assistant for Gateway City Church in Las Vegas. You serve the pastoral staff and have two areas of knowledge:
+
+1. VISITOR DATA: You have access to all visitor records for this church.
+2. BIBLE KNOWLEDGE: You have complete knowledge of the entire Bible - all 66 books, Old and New Testament. You know every story, passage, character, teaching, and theological theme. You can quote scripture, explain context, suggest verses for pastoral situations, compare passages, and answer questions about biblical content.
+
+A staff member asked: "${query}"
+
+If this is a question about the Bible, scripture, a specific passage, a biblical character, a theological topic, or anything related to God's Word - answer it directly and thoroughly in the explanation field, and return an empty ids array.
+
+If this is a question about visitors - search the visitor data and return matching IDs with a SHORT plain English response (1-2 sentences max). Write like you're talking to a pastor, never mention field names, JSON keys, or technical terms.
+
+If this is a Bible or theological question - answer concisely in 2-3 sentences max. Be warm and pastoral, not academic.
+
+Visitor data:
+${JSON.stringify(visitors, null, 1)}
+
+Do not use em dashes. Respond in this exact JSON format:
+{"ids": ["id1", "id2"], "explanation": "..."}`
+
+  try {
+    const text = await callClaude(prompt, 2048)
+    if (!text) return null
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) return null
+    const parsed = JSON.parse(jsonMatch[0])
+    if (!Array.isArray(parsed.ids)) return null
+    return parsed as { ids: string[]; explanation: string }
+  } catch {
+    return null
+  }
+}
+
 // ─── Urgency detection for inbound SMS ──────────────────────────────────────
 
 export async function analyzeUrgency(messageBody: string): Promise<{ isUrgent: boolean; reason: string } | null> {
