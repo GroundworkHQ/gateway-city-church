@@ -24,3 +24,44 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ── Grace realtime voice orb (see useGraceVoice.ts) ───────────────────────── */
+.grace-orb {
+  --orb-level: 0;
+  position: relative;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  transform: scale(calc(1 + var(--orb-level) * 0.3));
+  transition: transform 0.08s ease-out;
+}
+.grace-orb::before {
+  content: '';
+  position: absolute;
+  inset: -42%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(184,131,42,0.55) 0%, rgba(184,131,42,0.16) 42%, rgba(184,131,42,0) 70%);
+  filter: blur(6px);
+  opacity: calc(0.4 + var(--orb-level) * 0.55);
+  transition: opacity 0.14s ease;
+}
+.grace-orb-core {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #ffe9b8 0%, #e6b455 20%, #b8832a 52%, #7c5716 82%, #4d360d 100%);
+  box-shadow:
+    0 0 calc(34px + var(--orb-level) * 52px) rgba(184,131,42, calc(0.4 + var(--orb-level) * 0.45)),
+    inset 0 0 28px rgba(255,224,150,0.4),
+    inset 8px -10px 38px rgba(70,48,12,0.6);
+  filter: brightness(calc(1 + var(--orb-level) * 0.4));
+  transition: box-shadow 0.09s ease-out, filter 0.09s ease-out;
+}
+.grace-orb.listening .grace-orb-core { animation: graceOrbBreathe 3.4s ease-in-out infinite; }
+.grace-orb.thinking .grace-orb-core { animation: graceOrbThink 1.5s ease-in-out infinite; }
+.grace-orb.speaking .grace-orb-core { animation: graceOrbBreathe 2.6s ease-in-out infinite; }
+.grace-orb.speaking::before { opacity: 0.85; }
+@keyframes graceOrbBreathe { 0%, 100% { transform: scale(0.97); } 50% { transform: scale(1.02); } }
+@keyframes graceOrbThink { 0%, 100% { transform: scale(0.99); opacity: 0.7; } 50% { transform: scale(1.01); opacity: 1; } }

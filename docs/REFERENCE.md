@@ -10,8 +10,8 @@ Church visitor CRM for Pastor Danny Hand, Gateway City Church, Las Vegas. Visito
 - Supabase (project ID: `kdgbivcufoarmvckworj`) — Postgres + Realtime + RLS
 - Resend — transactional email (from: demo@innovativeblockchainsolutions.live)
 - Telnyx — SMS (number: +17754479016)
-- Anthropic SDK — `claude-haiku-4-5-20251001` for all AI features
-- ElevenLabs — Grace TTS voice (custom voice ID: `RSUcZp3ilp3WUZWLUwcY`, model: `eleven_flash_v2_5`)
+- Anthropic SDK — `claude-haiku-4-5-20251001` for all AI text features (incl. Grace text brain)
+- xAI Grok — Grace's realtime voice (speech-to-speech `grok-voice-latest`, voice "Carina"). Replaced ElevenLabs 2026-07.
 - Vercel — hosting
 - Repo: GroundworkHQ/gateway-city-church (private)
 - Live: https://gateway-city-church.vercel.app/admin (admin), /connect (visitor card)
@@ -26,11 +26,13 @@ Church visitor CRM for Pastor Danny Hand, Gateway City Church, Las Vegas. Visito
   - `app/visit/[churchId]/page.tsx` — visitor connection card (public)
   - `app/admin/page.tsx` — redirects /admin → /admin/[CHURCH_ID]
   - `app/connect/page.tsx` — redirects /connect → /visit/[CHURCH_ID]
-  - `lib/claude.ts` — all AI functions: follow-up emails, SMS, insights, Grace search
+  - `lib/claude.ts` — all AI functions: follow-up emails, SMS, insights, Grace search (`naturalLanguageSearch`)
   - `lib/telnyx.ts` — SMS sending
   - `lib/supabase-admin.ts` — server-side Supabase client (service role)
-  - `app/api/tts/route.ts` — ElevenLabs TTS endpoint
-  - `app/api/visitors/nlsearch/route.ts` — Grace natural language search
+  - `app/api/visitors/nlsearch/route.ts` — Grace natural language search (visitor data + Bible); used by BOTH text chat and the voice `search_visitors` function tool
+  - `lib/grace-voice-prompt.ts` — Grace's voice-mode system prompt (single source)
+  - `app/api/grace/realtime-token/route.ts` — mints the short-lived xAI realtime token server-side
+  - `app/admin/[churchId]/useGraceVoice.ts` — Grok realtime voice engine (mic PCM up, her PCM down, orb envelope, `search_visitors` function-calling, shared history)
   - `app/api/visitors/route.ts` — visitor creation (normalizes names to title case)
 
 ## 4. What's built
@@ -43,10 +45,12 @@ Church visitor CRM for Pastor Danny Hand, Gateway City Church, Las Vegas. Visito
 - AI pastoral snapshot per visitor
 - Prayer request digest
 - CSV export (name, email, phone, service, how heard, prayer, returning, opted out, first visit, last activity, email dates)
-- Grace AI assistant (see CLAUDE.md for full behavior spec) — chat in admin header, full visitor data + Bible knowledge access, voice input/output via ElevenLabs + Web Speech API
+- Grace AI assistant (see CLAUDE.md for full behavior spec) — chat in admin header, full visitor data + Bible knowledge access. **Voice rebuilt 2026-07 on xAI Grok realtime speech-to-speech (orb view), keeping the data brain via a `search_visitors` function tool; shared text/voice history.** This retired the old ElevenLabs + Web Speech pipeline and the Safari autoplay bug.
 
 ## 5. What's next
-- Fix Grace voice playback reliability in Safari (see Open issues in CLAUDE.md — DOM `<audio>` + blob URL approach, autoplay policy issue)
+- Add `XAI_API_KEY` to `.env.local` + Vercel, then test Grace voice + `search_visitors` function calling on-device (Chrome + Safari).
+- Pick the xAI voice for Grace (`GRACE_VOICE` in `app/api/grace/realtime-token/route.ts`, default "Carina", from the xAI Voice Library, case-sensitive).
+- Rate-limit `nlsearch` + `realtime-token` before heavy use (voice ~$3/hr).
 - <!-- Add future priorities here as scope grows -->
 
 ## 6. Conventions

@@ -6,6 +6,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { supabase } from '@/lib/supabase'
 import type { Visitor, Church } from '@/types'
 import VisitorDetail from './VisitorDetail'
+import { useGraceVoice } from './useGraceVoice'
 
 function relativeTime(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -43,64 +44,42 @@ export default function AdminDashboard() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showQR, setShowQR] = useState(false)
 
-  const [speakingIndex, setSpeakingIndex] = useState<number | null>(null)
-
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-
-  function stopAudio() {
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.src = ''
-    }
-  }
-
-  function getAudioContext() {} // kept for call sites, no-op now
-
-  async function speakText(text: string, index?: number, loop = false) {
-    stopAudio()
-    if (index !== undefined && speakingIndex === index) { setSpeakingIndex(null); return }
-    if (index !== undefined) setSpeakingIndex(index)
-
-    const res = await fetch('/api/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    })
-    if (!res.ok) { setSpeakingIndex(null); return }
-
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const el = audioRef.current!
-    el.src = url
-    el.onended = () => {
-      setSpeakingIndex(null)
-      URL.revokeObjectURL(url)
-      if (loop && conversationModeRef.current) startListening(true)
-    }
-    el.onerror = () => { setSpeakingIndex(null); URL.revokeObjectURL(url) }
-    el.play()
-  }
-
-  function speak(text: string, index: number) {
-    speakText(text, index)
-  }
-
-  // Grace - natural language search
+  // Grace - natural language search (text) + Grok realtime voice
   const [showGrace, setShowGrace] = useState(false)
   const [graceQuery, setGraceQuery] = useState('')
   const [graceLoading, setGraceLoading] = useState(false)
-  const [listening, setListening] = useState(false)
-  const recognitionRef = useRef<any>(null)
 
   const [graceMessages, setGraceMessages] = useState<Array<{ role: 'user' | 'grace'; text: string; ids?: string[] }>>([])
   const graceChatRef = useRef<HTMLDivElement>(null)
-  const conversationModeRef = useRef(false)
 
-  async function askGrace(query: string, fromVoice = false) {
+  function scrollGraceToBottom() {
+    setTimeout(() => graceChatRef.current?.scrollTo({ top: graceChatRef.current.scrollHeight, behavior: 'smooth' }), 50)
+  }
+
+  // Voice Grace: hands-free orb over the chat. Reaches the same nlsearch brain via
+  // the search_visitors function tool, and shares this message history both ways.
+  const graceVoice = useGraceVoice({
+    churchId,
+    getHistory: () => graceMessages.map(m => ({ role: m.role, content: m.text })),
+    onSearchResults: (ids, explanation) => {
+      setGraceMessages(prev => [...prev, { role: 'grace', text: explanation, ids }])
+      scrollGraceToBottom()
+    },
+    onSpokenTurn: (turn) => {
+      setGraceMessages(prev => [...prev, { role: turn.role, text: turn.content }])
+      scrollGraceToBottom()
+    },
+  })
+
+  async function toggleGraceVoice() {
+    if (graceVoice.active) { graceVoice.stop(); return }
+    const err = await graceVoice.start()
+    if (err) setGraceMessages(prev => [...prev, { role: 'grace', text: err }])
+  }
+
+  async function askGrace(query: string) {
     if (!query.trim()) return
-    recognitionRef.current?.stop()
-    const userMsg = { role: 'user' as const, text: query }
-    setGraceMessages(prev => [...prev, userMsg])
+    setGraceMessages(prev => [...prev, { role: 'user' as const, text: query }])
     setGraceQuery('')
     setGraceLoading(true)
     const res = await fetch('/api/visitors/nlsearch', {
@@ -112,46 +91,12 @@ export default function AdminDashboard() {
     const responseText = data.explanation ?? 'No results found.'
     setGraceMessages(prev => [...prev, { role: 'grace' as const, text: responseText, ids: data.ids ?? [] }])
     setGraceLoading(false)
-    setTimeout(() => graceChatRef.current?.scrollTo({ top: graceChatRef.current.scrollHeight, behavior: 'smooth' }), 50)
-    if (fromVoice) speakText(responseText, undefined, true)
+    scrollGraceToBottom()
   }
 
-  function startListening(loop = false) {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SR) return
-    if (!loop && listening) {
-      conversationModeRef.current = false
-      recognitionRef.current?.stop()
-      return
-    }
-    audioRef.current?.pause(); audioRef.current = null
-    setSpeakingIndex(null)
-    const rec = new SR()
-    rec.lang = 'en-US'
-    rec.interimResults = false
-    rec.continuous = false
-    recognitionRef.current = rec
-    rec.onstart = () => setListening(true)
-    rec.onend = () => setListening(false)
-    rec.onerror = () => { setListening(false); conversationModeRef.current = false }
-    rec.onresult = (e: any) => {
-      const transcript = e.results[0][0].transcript
-      askGrace(transcript, true)
-    }
-    rec.start()
-  }
-
-  function toggleConversation() {
-    if (conversationModeRef.current) {
-      conversationModeRef.current = false
-      recognitionRef.current?.stop()
-      stopAudio()
-      setSpeakingIndex(null)
-    } else {
-      getAudioContext() // unlock audio on user gesture
-      conversationModeRef.current = true
-      startListening()
-    }
+  function closeGrace() {
+    graceVoice.stop()
+    setShowGrace(false)
   }
 
   const qrRef = useRef<HTMLDivElement>(null)
@@ -269,7 +214,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="h-screen bg-[#0D1B2A] text-white flex flex-col">
-      <audio ref={audioRef} playsInline />
 
       {/* Header */}
       <div className="border-b border-white/10 px-6 py-3 flex items-center justify-between flex-shrink-0">
@@ -588,7 +532,7 @@ export default function AdminDashboard() {
               <p className="text-white font-semibold text-sm leading-none">Grace</p>
               <p className="text-white/35 text-xs mt-0.5">AI Assistant</p>
             </div>
-            <button onClick={() => { setShowGrace(false); conversationModeRef.current = false; recognitionRef.current?.stop(); stopAudio(); setSpeakingIndex(null) }} className="ml-auto text-white/25 hover:text-white/70 transition-colors text-lg leading-none">×</button>
+            <button onClick={closeGrace} className="ml-auto text-white/25 hover:text-white/70 transition-colors text-lg leading-none">×</button>
           </div>
 
           {/* Messages */}
@@ -608,18 +552,7 @@ export default function AdminDashboard() {
                 <div className={`max-w-[82%] text-sm ${msg.role === 'user'
                   ? 'bg-[#B8832A] text-[#0D1B2A] font-medium px-3.5 py-2.5 rounded-2xl rounded-tr-sm'
                   : 'text-white/85'}`}>
-                  <div className={`flex items-start gap-2 ${msg.role === 'grace' ? '' : ''}`}>
-                    <p className={msg.role === 'grace' ? 'leading-relaxed flex-1' : 'flex-1'}>{msg.text}</p>
-                    {msg.role === 'grace' && (
-                      <button onClick={() => { getAudioContext(); speak(msg.text, i) }} className="flex-shrink-0 mt-0.5 text-white/25 hover:text-[#B8832A] transition-colors" title={speakingIndex === i ? 'Stop' : 'Read aloud'}>
-                        {speakingIndex === i ? (
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-                        ) : (
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-                        )}
-                      </button>
-                    )}
-                  </div>
+                  <p className={msg.role === 'grace' ? 'leading-relaxed' : ''}>{msg.text}</p>
                   {msg.ids && msg.ids.length > 0 && (
                     <div className="mt-3 space-y-1.5">
                       {visitors.filter(v => msg.ids!.includes(v.id)).map(v => (
@@ -653,26 +586,22 @@ export default function AdminDashboard() {
 
           {/* Input */}
           <div className="px-3 pb-3 pt-2 border-t border-white/8">
-            <div className={`flex items-center gap-2 bg-white/6 rounded-xl px-3 py-2 border transition-colors ${listening ? 'border-[#B8832A]/70' : 'border-white/10 focus-within:border-[#B8832A]/50'}`}>
+            <div className="flex items-center gap-2 bg-white/6 rounded-xl px-3 py-2 border border-white/10 focus-within:border-[#B8832A]/50 transition-colors">
               <button
-                onClick={toggleConversation}
-                className={`flex-shrink-0 transition-colors ${listening ? 'text-[#B8832A]' : 'text-white/25 hover:text-white/50'}`}
-                title={listening ? 'Stop listening' : 'Speak to Grace'}
+                onClick={toggleGraceVoice}
+                className="flex-shrink-0 text-white/25 hover:text-white/50 transition-colors"
+                title="Talk to Grace"
               >
-                {listening ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6" className="animate-pulse"/></svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
-                  </svg>
-                )}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
               </button>
               <input
                 autoFocus
                 value={graceQuery}
                 onChange={e => setGraceQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && askGrace(graceQuery)}
-                placeholder={listening ? 'Listening...' : 'Ask Grace...'}
+                placeholder="Ask Grace..."
                 className="flex-1 bg-transparent text-white placeholder-white/25 text-sm focus:outline-none"
               />
               <button
@@ -686,6 +615,32 @@ export default function AdminDashboard() {
               </button>
             </div>
           </div>
+
+          {/* Hands-free voice view — takes over the window while a Grok voice call is live */}
+          {graceVoice.active && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 px-6" style={{ background: 'radial-gradient(circle at 50% 42%, #16263a 0%, #0f1e2e 62%, #0a1622 100%)' }}>
+              <button onClick={() => graceVoice.stop()} className="absolute top-3 right-4 text-white/30 hover:text-white/70 transition-colors text-xl leading-none">×</button>
+              <div
+                ref={graceVoice.orbRef}
+                onClick={graceVoice.interrupt}
+                className={`grace-orb${graceVoice.orbState ? ' ' + graceVoice.orbState : ''}`}
+              >
+                <span className="grace-orb-core" />
+              </div>
+              {(graceVoice.capUser || graceVoice.capBot) && (
+                <div className="w-full max-w-[280px] text-center max-h-[28%] overflow-y-auto">
+                  {graceVoice.capUser && <p className="text-white/45 text-sm italic mb-1.5">{graceVoice.capUser}</p>}
+                  {graceVoice.capBot && <p className="text-white/90 text-[0.95rem] leading-relaxed">{graceVoice.capBot}</p>}
+                </div>
+              )}
+              <button
+                onClick={() => graceVoice.stop()}
+                className="absolute bottom-5 px-4 py-1.5 rounded-full border border-white/15 text-white/60 text-xs hover:border-[#B8832A]/70 hover:text-white/90 transition-colors"
+              >
+                End voice
+              </button>
+            </div>
+          )}
         </div>
       )}
 

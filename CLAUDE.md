@@ -27,22 +27,20 @@ RESEND_FROM_NAME
 TELNYX_API_KEY
 TELNYX_PHONE_NUMBER
 ANTHROPIC_API_KEY
-ELEVENLABS_API_KEY
+XAI_API_KEY                     # Grok realtime voice for Grace (TTS + STT + realtime)
 CRON_SECRET
 NEXT_PUBLIC_APP_URL
 NEXT_PUBLIC_CHURCH_ID
 ```
 
 ## Grace — AI Assistant
-- Lives in the admin header (gold pill button, cross icon)
-- Chat window drops top-right; shifts left on Messages tab
-- Has full access to all visitor data: emails, SMS, calls, attendance, notes
-- Has full Bible knowledge (all 66 books, OT + NT)
-- Responses kept to 1-2 sentences
-- Voice output: ElevenLabs TTS (custom Grace voice)
-- Voice input: Web Speech API — works in Chrome and Safari, NOT Brave
-- Conversation mode: mic stays live, Grace speaks response, mic restarts automatically
-- CSV download from Grace search results
+- Lives in the admin header (gold pill button, cross icon); chat window drops top-right
+- Text brain unchanged: `/api/visitors/nlsearch` → `naturalLanguageSearch()` in `lib/claude.ts` (visitor data + full Bible knowledge, 1-2 sentence replies, CSV export from results)
+- **Voice rebuilt on the assistant-starter architecture (2026-07): xAI Grok realtime speech-to-speech** (orb view over the chat), replacing the old ElevenLabs TTS + Web Speech input. This retired the Safari autoplay bug entirely.
+- Voice keeps Grace's full data brain via a `search_visitors` **function tool**: Grok calls it mid-call, the client hits the same `nlsearch` route, Grok speaks the answer and the matching visitor cards render behind the orb. Bible questions Grok answers directly.
+- Text and voice share one message history (start typing, switch to voice mid-thread, and back).
+- Files: `lib/grace-voice-prompt.ts` (voice system prompt), `app/api/grace/realtime-token/route.ts` (mints xAI token server-side), `app/admin/[churchId]/useGraceVoice.ts` (realtime engine hook), orb CSS in `app/globals.css`.
+- No crisis/DV safety net (Grace serves pastoral staff, not vulnerable visitors — deliberately omitted).
 
 ## Current priority
-Fix Grace voice playback reliability in Safari — using DOM `<audio ref playsInline>` + blob URL approach, still debugging autoplay policy. See `docs/REFERENCE.md` for full open-issues tracking as scope grows.
+Grace voice was just rebuilt on Grok realtime. Needs: (1) `XAI_API_KEY` in `.env.local` + Vercel, (2) live on-device test of voice + `search_visitors` function calling, (3) pick the xAI voice (`GRACE_VOICE` in `realtime-token.js`, default "Carina"), (4) rate-limit `nlsearch` + `realtime-token` before heavy use (voice ~$3/hr). See `docs/REFERENCE.md`.
