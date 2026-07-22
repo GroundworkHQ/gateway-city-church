@@ -25,13 +25,14 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* ── Grace realtime voice orb (see useGraceVoice.ts) ───────────────────────── */
+/* ── Grace realtime voice cross (audio-reactive; see useGraceVoice.ts) ──────────
+   Class/var names kept as "orb" so the reactive plumbing in useGraceVoice.ts
+   (orbRef, --orb-level) is untouched; the visual is now a glowing cross. */
 .grace-orb {
   --orb-level: 0;
   position: relative;
-  width: 132px;
-  height: 132px;
-  border-radius: 50%;
+  width: 200px;
+  height: 200px;
   cursor: pointer;
   flex-shrink: 0;
   transform: scale(calc(1 + var(--orb-level) * 0.3));
@@ -47,17 +48,21 @@ body {
   opacity: calc(0.4 + var(--orb-level) * 0.55);
   transition: opacity 0.14s ease;
 }
+/* The cross is ONE solid clipped shape (not two overlapping bars) so there are
+   no internal seam lines. Glow follows the shape via drop-shadow (box-shadow
+   would be clipped away by clip-path); the ::before halo adds the ambient bloom. */
 .grace-orb-core {
   position: absolute;
   inset: 0;
-  border-radius: 50%;
-  background: radial-gradient(circle at 38% 32%, #ffe9b8 0%, #e6b455 20%, #b8832a 52%, #7c5716 82%, #4d360d 100%);
-  box-shadow:
-    0 0 calc(34px + var(--orb-level) * 52px) rgba(184,131,42, calc(0.4 + var(--orb-level) * 0.45)),
-    inset 0 0 28px rgba(255,224,150,0.4),
-    inset 8px -10px 38px rgba(70,48,12,0.6);
-  filter: brightness(calc(1 + var(--orb-level) * 0.4));
-  transition: box-shadow 0.09s ease-out, filter 0.09s ease-out;
+  clip-path: polygon(
+    39% 4%, 61% 4%, 61% 24%, 84% 24%, 84% 45%, 61% 45%,
+    61% 96%, 39% 96%, 39% 45%, 16% 45%, 16% 24%, 39% 24%
+  );
+  background: linear-gradient(155deg, #ffe9b8 0%, #f0c065 28%, #d49b34 62%, #a8781f 100%);
+  filter:
+    drop-shadow(0 0 calc(14px + var(--orb-level) * 40px) rgba(184,131,42, calc(0.45 + var(--orb-level) * 0.4)))
+    brightness(calc(1 + var(--orb-level) * 0.4));
+  transition: filter 0.1s ease-out;
 }
 .grace-orb.listening .grace-orb-core { animation: graceOrbBreathe 3.4s ease-in-out infinite; }
 .grace-orb.thinking .grace-orb-core { animation: graceOrbThink 1.5s ease-in-out infinite; }

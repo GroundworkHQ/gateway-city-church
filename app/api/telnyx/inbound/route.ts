@@ -78,9 +78,10 @@ export async function POST(req: NextRequest) {
       .single()
 
     // Create an urgent note on the visitor record
+    const isEmergency = urgency.severity === 'emergency'
     await supabaseAdmin.from('church_visitor_notes').insert({
       visitor_id: visitor.id,
-      body: `Urgent message flagged: "${body}"${urgency.reason ? ` — ${urgency.reason}` : ''}`,
+      body: `${isEmergency ? 'EMERGENCY' : 'Urgent'} message flagged: "${body}"${urgency.reason ? ` (${urgency.reason})` : ''}`,
       tag: 'urgent',
     })
 
@@ -88,10 +89,10 @@ export async function POST(req: NextRequest) {
     const pastorPhone = (visitorFull as any)?.churches?.pastor_phone
     if (pastorPhone) {
       const firstName = (visitorFull?.name ?? 'A visitor').split(' ')[0]
-      await sendSms(
-        pastorPhone,
-        `Urgent: ${firstName} sent a message that may need immediate attention. Check the admin panel.`
-      ).catch(() => null)
+      const alert = isEmergency
+        ? `EMERGENCY: ${firstName} sent a message that may need immediate attention right now.${urgency.reason ? ` ${urgency.reason}` : ''} Check the admin panel.`
+        : `Urgent: ${firstName} sent a message that may need same-day attention. Check the admin panel.`
+      await sendSms(pastorPhone, alert).catch(() => null)
     }
   }
 

@@ -37,11 +37,23 @@ function visitorContextLines(visitor: VisitorContext): string {
   ].filter(Boolean).join('\n')
 }
 
-async function callClaude(prompt: string, maxTokens = 512): Promise<string | null> {
+const DEFAULT_MODEL = 'claude-sonnet-5'
+
+async function callClaude(
+  prompt: string,
+  maxTokens = 512,
+  model: string = DEFAULT_MODEL
+): Promise<string | null> {
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model,
       max_tokens: maxTokens,
+      // On Sonnet, adaptive thinking is ON by default and would consume the small
+      // max_tokens budgets (e.g. the 200-token urgency check), truncating the JSON.
+      // Haiku defaults to no thinking, so only disable it off-Haiku.
+      ...(model.startsWith('claude-haiku')
+        ? {}
+        : { thinking: { type: 'disabled' as const } }),
       messages: [{ role: 'user', content: prompt }],
     })
     const text = message.content[0].type === 'text' ? message.content[0].text : null
@@ -258,7 +270,12 @@ Do not use em dashes. Respond in this exact JSON format:
 {"ids": ["id1", "id2"], "explanation": "..."}`
 
   try {
-    const text = await callClaude(prompt, 2048)
+    // Haiku on purpose: nlsearch powers the live text chat AND the voice
+    // search_visitors function tool, so it is the one latency-sensitive path.
+    // Query interpretation + retrieval + short pastoral/Bible answers are well
+    // within Haiku's range; keep the judgment calls (drafts, snapshot, crisis
+    // triage) on Sonnet via the default.
+    const text = await callClaude(prompt, 2048, 'claude-haiku-4-5')
     if (!text) return null
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) return null
@@ -272,22 +289,65 @@ Do not use em dashes. Respond in this exact JSON format:
 
 // ─── Urgency detection for inbound SMS ──────────────────────────────────────
 
-export async function analyzeUrgency(messageBody: string): Promise<{ isUrgent: boolean; reason: string } | null> {
-  const prompt = `You are reviewing an inbound SMS from a church visitor. Determine if this message indicates a crisis, urgent need, or situation that requires immediate pastoral attention (e.g. grief, mental health crisis, domestic situation, medical emergency, suicidal ideation, spiritual crisis that needs same-day response).
+export type UrgencySeverity = 'emergency' | 'urgent' | 'routine'
+
+export async function analyzeUrgency(
+  messageBody: string
+): Promise<{ isUrgent: boolean; severity: UrgencySeverity; reason: string } | null> {
+  const prompt = `You are the triage layer for Gateway City Church in Las Vegas. Your one job is to read an inbound text from a visitor and decide whether it needs a pastor's attention TODAY, not at the next routine follow-up. A pastor is alerted the moment you flag it, so a missed real crisis is far worse than a false alarm.
 
 Message: "${messageBody}"
 
+Think privately before you answer, and never show this reasoning:
+1. Read the message literally first. What is the person actually saying or asking?
+2. Is anyone unsafe, in acute pain, or facing something time-sensitive?
+3. Would waiting until the normal weekly follow-up cause real harm or a missed moment of ministry? If yes, it is urgent.
+
+FLAG AS URGENT (needs a same-day pastoral response):
+- Any hint of suicide, self-harm, or not wanting to be here ("I can't go on", "what's the point anymore").
+- Abuse, violence, or fear of a partner or family member, or feeling unsafe at home.
+- A medical emergency, hospitalization, or a death in the family or fresh grief.
+- Acute mental-health distress: panic, hopelessness, a breakdown.
+- A spiritual or personal crisis where the person is clearly reaching out for help right now, not just sharing.
+
+DO NOT FLAG (normal, handle in routine follow-up):
+- Scheduling, service times, directions, giving, or general questions.
+- Ordinary life updates, sharing good news, or a routine prayer request with no urgency ("please pray for my job search").
+- Everyday venting or stress that is not a crisis.
+
+When you are genuinely unsure whether something crosses the line, flag it as urgent. The cost of a false alarm is small, the cost of missing a real crisis is not.
+
+Set severity:
+- "emergency" for immediate danger to life or safety: suicide or self-harm, abuse or violence, or a medical emergency. A pastor needs to be reached right now.
+- "urgent" for a same-day pastoral response that is not life-threatening: fresh grief, acute distress, or someone clearly reaching out for help.
+- "routine" for anything that can wait for normal follow-up.
+isUrgent must be true when severity is "emergency" or "urgent", and false when severity is "routine".
+
+Keep the reason to one plain sentence, no jargon, no em dashes.
+
 Respond in this exact JSON format:
-{"isUrgent": true/false, "reason": "brief explanation or empty string if not urgent"}`
+{"isUrgent": true/false, "severity": "emergency" | "urgent" | "routine", "reason": "brief explanation or empty string if routine"}`
 
   try {
-    const text = await callClaude(prompt, 128)
+    const text = await callClaude(prompt, 200)
     if (!text) return null
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) return null
     const parsed = JSON.parse(jsonMatch[0])
     if (typeof parsed.isUrgent !== 'boolean') return null
-    return parsed as { isUrgent: boolean; reason: string }
+    const severity: UrgencySeverity =
+      parsed.severity === 'emergency' ||
+      parsed.severity === 'urgent' ||
+      parsed.severity === 'routine'
+        ? parsed.severity
+        : parsed.isUrgent
+          ? 'urgent'
+          : 'routine'
+    return {
+      isUrgent: parsed.isUrgent,
+      severity,
+      reason: typeof parsed.reason === 'string' ? parsed.reason : '',
+    }
   } catch {
     return null
   }

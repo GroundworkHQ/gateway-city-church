@@ -192,7 +192,11 @@ export function useGraceVoice({ churchId, getHistory, onSearchResults, onSpokenT
           session: {
             voice: voiceRef.current || 'Carina',
             instructions: instructionsRef.current || '',
-            turn_detection: { type: 'server_vad', silence_duration_ms: 500 },
+            // threshold raised above the default (~0.5) so ambient office noise
+            // (HVAC, side conversations) doesn't trip the VAD — only clear, close
+            // speech should start a turn. If it starts missing soft-spoken users,
+            // lower toward 0.55; if noise still triggers, raise toward 0.75.
+            turn_detection: { type: 'server_vad', threshold: 0.65, prefix_padding_ms: 300, silence_duration_ms: 500 },
             audio: {
               input: { format: { type: 'audio/pcm', rate: 24000 }, transcription: { language_hint: 'en' } },
               output: { format: { type: 'audio/pcm', rate: 24000 } },

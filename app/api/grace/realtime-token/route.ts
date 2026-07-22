@@ -10,7 +10,7 @@ import { GRACE_VOICE_PROMPT } from '@/lib/grace-voice-prompt'
 // Library) and is CASE-SENSITIVE (Carina, Ara, Celeste, Eve...). The docs'
 // lowercase names are wrong, and an invalid voice returns a misleading
 // "Incorrect API key" error.
-const GRACE_VOICE = 'Carina'
+const GRACE_VOICE = 'Ara'
 
 export async function POST() {
   const apiKey = process.env.XAI_API_KEY

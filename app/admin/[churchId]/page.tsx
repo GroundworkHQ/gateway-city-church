@@ -519,7 +519,7 @@ export default function AdminDashboard() {
 
       {/* Grace chat window */}
       {showGrace && (
-        <div className="fixed top-[60px] right-6 z-50 w-[340px] rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] flex flex-col border border-white/10" style={{maxHeight: '65vh', background: 'linear-gradient(160deg, #16263a 0%, #0f1e2e 100%)'}}>
+        <div className="fixed top-[60px] right-6 z-50 w-[340px] rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] flex flex-col border border-white/10" style={{height: '65vh', background: 'linear-gradient(160deg, #16263a 0%, #0f1e2e 100%)'}}>
 
           {/* Header */}
           <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/8">
@@ -589,7 +589,7 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-2 bg-white/6 rounded-xl px-3 py-2 border border-white/10 focus-within:border-[#B8832A]/50 transition-colors">
               <button
                 onClick={toggleGraceVoice}
-                className="flex-shrink-0 text-white/25 hover:text-white/50 transition-colors"
+                className="flex-shrink-0 text-[#B8832A] hover:text-[#d4a043] transition-colors"
                 title="Talk to Grace"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -627,12 +627,6 @@ export default function AdminDashboard() {
               >
                 <span className="grace-orb-core" />
               </div>
-              {(graceVoice.capUser || graceVoice.capBot) && (
-                <div className="w-full max-w-[280px] text-center max-h-[28%] overflow-y-auto">
-                  {graceVoice.capUser && <p className="text-white/45 text-sm italic mb-1.5">{graceVoice.capUser}</p>}
-                  {graceVoice.capBot && <p className="text-white/90 text-[0.95rem] leading-relaxed">{graceVoice.capBot}</p>}
-                </div>
-              )}
               <button
                 onClick={() => graceVoice.stop()}
                 className="absolute bottom-5 px-4 py-1.5 rounded-full border border-white/15 text-white/60 text-xs hover:border-[#B8832A]/70 hover:text-white/90 transition-colors"
